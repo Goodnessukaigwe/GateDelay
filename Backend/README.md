@@ -16,6 +16,25 @@ These values should always be reviewed before local development or deployment:
 
 Redis-backed workers also require either `REDIS_URL` or `REDIS_HOST`/`REDIS_PORT`.
 
+## Trade executor
+
+`Backend/jobs/tradeExecutor.js` starts the scheduled-trade worker. It loads the
+Agenda scheduler and logs the environment, scheduler name, and whether MongoDB
+configuration is present. The MongoDB URI itself is never written to logs.
+
+Environment variables:
+
+- `MONGODB_URI` - MongoDB connection used by Agenda and scheduled-trade models;
+  defaults to `mongodb://localhost:27017/gatedelay` when unset.
+- `NODE_ENV` - startup environment included in the executor log; defaults to
+  `development`.
+
+Run the module-load smoke check with:
+
+```bash
+npm run test:trade-executor
+```
+
 ## Setup
 
 ```bash
