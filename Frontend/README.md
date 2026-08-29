@@ -280,6 +280,7 @@ error, not a blank screen.
 | `GET /api/market-audit` | Proxies NestJS audit logs for `/audit` | `NEXT_PUBLIC_API_URL` |
 | `POST /api/multisig/execute` | Executes a ready multisig tx and maps `TransactionExecuted` | (in-memory store; wallet on `/wallet`) |
 | `POST /api/ipfs/upload-json` | Stores market JSON metadata; returns gateway URL | `NEXT_PUBLIC_IPFS_GATEWAY` (optional) |
+| `POST /api/ipfs/pin/[hash]` | Pins an already-uploaded IPFS hash (used after upload) | `NEXT_PUBLIC_IPFS_GATEWAY` (optional) |
 | `GET /api/ipfs/gateway/[hash]` | Resolves a gateway URL + storage status for an IPFS hash | `NEXT_PUBLIC_IPFS_GATEWAY` (optional) |
 
 ### `/api/market-sentiment` (#755)
@@ -327,6 +328,32 @@ that points the gateway at localhost fails with `CONFIG_ERROR` instead of
 booting a broken upload path. Malformed JSON returns `400` rather than an
 unhandled exception that blanked the page.
 
+### `/api/ipfs/pin/[hash]` (#741)
+
+The pin route is the write-side follow-up to `/api/ipfs/upload-json`. `[hash]`
+is matched by a Next.js dynamic segment (see `app/api/ipfs/pin/[hash]/route.ts`).
+`useIPFS.pin` (from `MarketIPFSPanel` on `/markets/create`) POSTs an optional
+`{ name }` label after a successful upload so the in-memory `lib/ipfsStore`
+shim marks that hash as pinned — the same store the gateway route reads.
+
+```json
+{ "success": true, "message": "Hash Qm… pinned successfully", "data": { "hash": "Qm…", "pinned": true } }
+```
+
+This handler is an API route, not a page: it never renders layout or CSS.
+Wallet connect and navigation still come from `app/layout.tsx` and work on
+first load; the pin route mounts no chrome of its own.
+
+The route never throws into the app shell. Missing/empty/unsupported hashes
+or invalid JSON return `400 VALIDATION_ERROR`. An unknown hash (not yet
+uploaded) returns `404 NOT_FOUND` with a message that points at
+`POST /api/ipfs/upload-json`. Any other fault returns `500 INTERNAL_ERROR`.
+Contributors get a JSON reason instead of a blank screen.
+
+**Smoke test:** `app/api/ipfs/pin/[hash]/route.test.ts` (upload → pin, optional
+body, missing/malformed hash, invalid JSON, unknown hash, unexpected fault).
+Run with `npm test` or `npx vitest run app/api/ipfs/pin`.
+
 ### `/api/ipfs/gateway/[hash]` (#738)
 
 The gateway route is the read side of the upload flow. `[hash]` is matched by a
@@ -356,7 +383,7 @@ unexpected fault). Run with `npm test` or `npx vitest run app/api/ipfs`.
 cd Frontend
 cp .env.example .env.local   # set NEXT_PUBLIC_API_URL / BACKEND_URL as needed
 npm install
-npm test                     # includes the five route suites above
+npm test                     # includes the IPFS pin suite and other route suites above
 npm run dev                  # open /, /audit, /wallet, /markets/create
 ```
 
@@ -368,6 +395,8 @@ Manual checklist:
 4. `/wallet` propose → sign (threshold) → execute shows `TransactionExecuted(...)`.
 5. `/markets/create` upload returns a non-localhost gateway URL; opening that URL in the gateway route shows the uploaded metadata.
 6. Hitting `/api/ipfs/gateway/` with an empty hash returns a JSON `VALIDATION_ERROR`, never a blank screen.
+7. After a successful upload on `/markets/create`, **Pin Hash** calls `POST /api/ipfs/pin/[hash]` and the panel shows a success toast (not a blank card).
+8. `POST /api/ipfs/pin/` with an empty or unknown hash returns JSON (`VALIDATION_ERROR` / `NOT_FOUND`), never a blank screen.
 
 ## SSR Notes
 
