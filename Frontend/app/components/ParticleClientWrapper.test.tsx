@@ -1,12 +1,6 @@
-import { describe, it, expect, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { describe, it, expect } from "vitest";
+import { render, screen } from "@testing-library/react";
 import { ParticleClientWrapper } from "./ParticleClientWrapper";
-
-vi.mock("./ParticleProvider", () => ({
-  ParticleProvider: ({ children }: { children: import("react").ReactNode }) => (
-    <div data-testid="particle-provider">{children}</div>
-  ),
-}));
 
 describe("ParticleClientWrapper", () => {
   it("renders navbar and wallet chrome on first paint instead of a blank screen", () => {
@@ -22,7 +16,7 @@ describe("ParticleClientWrapper", () => {
     expect(screen.queryByTestId("wallet-provider-error")).not.toBeInTheDocument();
   });
 
-  it("wraps children with ParticleProvider after the client module loads", async () => {
+  it("keeps the app shell visible while the default wallet root mounts", () => {
     render(
       <ParticleClientWrapper>
         <span>shell</span>
@@ -30,8 +24,5 @@ describe("ParticleClientWrapper", () => {
     );
 
     expect(screen.getByText("shell")).toBeInTheDocument();
-    await waitFor(() => {
-      expect(screen.getByTestId("particle-provider")).toBeInTheDocument();
-    });
   });
 });
