@@ -227,6 +227,41 @@ Adding a route to the navbar means adding it to `NAV_LINKS` in
 `components/layout/Navigation.tsx`; the desktop row and the mobile drawer both
 render from that one array.
 
+## Settings (`/settings`) and SETTINGS_SUMMARY.md
+
+[`SETTINGS_SUMMARY.md`](SETTINGS_SUMMARY.md) is the resolution-status map for
+the user-settings system. It is not a runtime module — Next.js does not import
+the markdown — but it is the document that tells you how `/settings` uses the
+app shell above instead of mounting its own navbar or wallet provider.
+
+**What the page does.** `app/settings/page.tsx` is the tabbed preferences UI
+(Appearance, Notifications, Trading, Privacy, Display). State lives in
+`lib/settings.ts` (`settingsService`, localStorage key `gate_delay_user_settings`)
+and is consumed through `hooks/useSettings.ts`. `ThemeProvider` (already in
+`app/layout.tsx`) applies `settings.theme` on first load.
+
+**What the shell already provides.** Wallet connect, Markets/Settings nav, theme
+tokens, toasts, and `PageErrorBoundary` come from `app/layout.tsx`. The settings
+route only fills `<main>`. First load of `/` or `/settings` should show the
+navbar and **Connect Wallet** immediately; Particle credentials are optional
+(no-op ConnectKit when unset). Settings do not call the backend and do not
+require `NEXT_PUBLIC_API_URL`.
+
+**Failures vs blank screens.** A render throw is caught by `PageErrorBoundary`
+(message + stack in development). A bad import file shows a toast, not a white
+page. localStorage errors are logged and the store keeps `DEFAULT_SETTINGS`.
+See the troubleshooting table in SETTINGS_SUMMARY.md.
+
+**Setup (settings only):**
+
+```bash
+cd Frontend
+cp -n .env.example .env.local   # optional for this route
+npm install
+npm run dev                     # http://localhost:3000/settings
+npm test -- lib/settings.test.ts app/settings/page.test.tsx
+```
+
 ## The `/audit` route
 
 `app/audit/page.tsx` is the market audit log. It owns the page container, header
