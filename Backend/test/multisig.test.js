@@ -25,6 +25,18 @@ describe('Multisig Service', () => {
     it('should throw error for invalid walletId', () => {
       expect(() => multisigService.getWallet('INVALID')).toThrow('Multisig wallet not found');
     });
+
+    it('should not resolve reserved object keys as wallets', () => {
+      expect(() => multisigService.getWallet('constructor')).toThrow('Multisig wallet not found');
+      expect(() => multisigService.getWallet('__proto__')).toThrow('Multisig wallet not found');
+      expect(() => multisigService.getWallet('toString')).toThrow('Multisig wallet not found');
+    });
+
+    it('should report owner membership without leaking invalid-address errors', () => {
+      expect(multisigService.isOwner(walletId, owner1)).toBe(true);
+      expect(multisigService.isOwner(walletId, ethers.Wallet.createRandom().address)).toBe(false);
+      expect(multisigService.isOwner(walletId, 'not-an-address')).toBe(false);
+    });
   });
 
   describe('Transaction Flow', () => {
@@ -87,6 +99,12 @@ describe('Multisig Service', () => {
       const newTxId = await multisigService.proposeTransaction(walletId, txData, owner1);
       await expect(multisigService.processTransaction(newTxId))
         .rejects.toThrow(/Insufficient signatures/);
+    });
+
+    it('should reject execution when a provided executor is not an owner', async () => {
+      const outsider = ethers.Wallet.createRandom().address;
+      await expect(multisigService.processTransaction(currentTxId, outsider))
+        .rejects.toThrow('Executor is not an owner of this multisig');
     });
   });
 });

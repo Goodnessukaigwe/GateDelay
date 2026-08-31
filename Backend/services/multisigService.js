@@ -12,10 +12,11 @@ const { ethers } = require('ethers');
  *    `signature` over the transaction id via `ethers.verifyMessage` (EIP-191 personal_sign)
  *    and requires it to match the claimed `owner`, who must in turn be a configured owner of
  *    the target wallet. A caller can no longer claim to be an owner by name alone — they must
- *    hold that owner's private key. `proposeTransaction` still trusts the caller-supplied
- *    `proposer` identity (no signature required to propose, only to sign), matching wallets
- *    where anyone can suggest a transaction but only owners can approve it; callers that need
- *    to restrict *who* may propose should gate this at the route/auth-middleware layer.
+ *    hold that owner's private key.
+ *  - HTTP propose/execute identity is enforced in `routes/multisig.js` (issue #702): the
+ *    service still accepts a caller-supplied proposer/executor address so unit tests can
+ *    exercise the domain rules, but the route rejects unsigned claims before they reach here.
+ *  - Wallet lookup uses own-property checks so reserved keys never resolve as wallets.
  *  - `TREASURY.scheme: 'BLS'` is aspirational metadata only — verification here is ECDSA via
  *    ethers for both schemes. There is no BLS signature support in this module.
  *  - Rate limiting for the HTTP surface lives in `routes/multisig.js` (see `strictDDoSGuard`),
@@ -73,9 +74,29 @@ const MULTISIG_WALLETS = {
  * @returns {object}
  */
 function getWallet(walletId) {
-  const wallet = MULTISIG_WALLETS[walletId];
-  if (!wallet) throw new Error('Multisig wallet not found');
-  return wallet;
+  if (typeof walletId !== 'string' || !Object.hasOwn(MULTISIG_WALLETS, walletId)) {
+    throw new Error('Multisig wallet not found');
+  }
+  return MULTISIG_WALLETS[walletId];
+}
+
+/**
+ * Whether `address` is a configured owner of `walletId`.
+ * Invalid addresses return false rather than throwing.
+ */
+function isOwner(walletId, address) {
+  let normalized;
+  try {
+    normalized = ethers.getAddress(address);
+  } catch {
+    return false;
+  }
+
+  try {
+    return getWallet(walletId).owners.includes(normalized);
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -167,12 +188,25 @@ async function collectSignature(txId, owner, signature) {
 /**
  * Process/Execute a multi-sig transaction
  * @param {string} txId
+ * @param {string} [executor] optional owner address; when provided must be a wallet owner
  */
-async function processTransaction(txId) {
+async function processTransaction(txId, executor) {
   const tx = pendingTransactions.get(txId);
   if (!tx) throw new Error('Transaction not found');
 
   const wallet = getWallet(tx.walletId);
+
+  if (executor !== undefined) {
+    let normalizedExecutor;
+    try {
+      normalizedExecutor = ethers.getAddress(executor);
+    } catch {
+      throw new Error('Executor is not a valid address');
+    }
+    if (!wallet.owners.includes(normalizedExecutor)) {
+      throw new Error('Executor is not an owner of this multisig');
+    }
+  }
 
   if (tx.signatures.length < wallet.threshold) {
     throw new Error(`Insufficient signatures. Required: ${wallet.threshold}, Current: ${tx.signatures.length}`);
@@ -200,6 +234,7 @@ function getTransactionStatus(txId) {
 
 module.exports = {
   getWallet,
+  isOwner,
   proposeTransaction,
   collectSignature,
   processTransaction,
