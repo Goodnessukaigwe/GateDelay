@@ -41,12 +41,36 @@ npm run test:trade-executor
 npm install
 ```
 
-## Run
+## Run the Nest API
 
 ```bash
-npm run dev
+npm run start:dev
 ```
 
+Run the legacy Express API from the repository root with `npm --prefix backend run start`.
+
+## Market data and balances
+
+The Nest market-data module uses AviationStack for flight queries and caches responses for five minutes. Set `AVIATION_STACK_API_KEY` in `.env`; requests are exposed at `/api/market-data/flights` and `/api/market-data/airlines`.
+
+Balances are persisted by `models/Balance.js` and are shared by the Nest API and legacy Express routes:
+
+- Nest: `GET /api/balances/:userId` and `GET /api/balances/:userId/:asset`
+- Legacy: `GET /user/balance`, `/v1/users/balance`, and `/v2/users/balance` with the `userId` query parameter
+
+Run the dependency-free module wiring smoke check from this directory:
+
+```bash
+npm run test:balance
+```
+
+The Nest scripts are also run from `Backend`:
+
+```bash
+npm run start:dev
+npm run build
+npm test
+```
 Use `npm run start:dev` for the NestJS development API. The migration REST API is owned by the Express entrypoint:
 
 ```bash
@@ -259,6 +283,37 @@ explicitly:
 
 ```bash
 npx eslint middleware/tradeValidation.js
+```
+
+## Rate limit configuration
+
+`Backend/config/rateLimits.js` is the single CommonJS source of rate-limit rules
+shared by the legacy Express limiter (`Backend/middleware/rateLimiter.js`) and the
+Nest rate-limiter module (`Backend/src/rate-limiter/`). It is a plain data module —
+requiring it has no side effects and opens no connections.
+
+**Sections** — `tiers` (PUBLIC / BASIC / PREMIUM / VIP / ADMIN request budgets),
+`endpoints` (per-endpoint, per-tier `{ max, windowMs }` overrides), `ipLimits`
+(`global` and `strict` per-IP buckets), `whitelist`, `messages`, `headers`,
+`redis`, `costs` (read / write / heavy operation weights), and `adaptive`
+(load-based tightening, disabled by default).
+
+**Environment variables**
+
+| Variable | Required | Purpose |
+|---|---|---|
+| `RATE_LIMIT_WHITELIST` | No | Comma-separated IPs exempt from rate limiting. Empty/unset ⇒ `whitelist.ips` is `[]`. |
+
+Everything else — tier budgets, window sizes, Redis prefix/TTL — is a
+compile-time constant in this file, not an env var. Redis connection details for
+the limiter store come from the standard `REDIS_HOST` / `REDIS_PORT` /
+`REDIS_DB` vars read by `middleware/rateLimiter.js`.
+
+**Scripts**
+
+```bash
+npm run test:rate-limits   # smoke: config module loads and every section/tier is present
+npm test                   # runs src/rate-limits-config.spec.ts (shape + consistency checks)
 ```
 
 ## Health endpoints

@@ -5,6 +5,8 @@ import {
   BETA_ACCESS_CHECKER,
   MarketAuditService,
 } from './market-audit.service';
+import betaAccess from '../../../backend/services/betaAccess';
+import { BETA_ACCESS_CHECKER, MarketAuditService } from './market-audit.service';
 
 const nodeRequire = createRequire(__filename);
 const betaAccess = nodeRequire('../../../backend/services/betaAccess');
