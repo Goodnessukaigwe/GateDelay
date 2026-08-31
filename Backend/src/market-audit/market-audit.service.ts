@@ -1,11 +1,18 @@
-import { ForbiddenException, Inject, Injectable, Optional } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Inject,
+  Injectable,
+  Optional,
+} from '@nestjs/common';
 import { createHash, randomUUID } from 'crypto';
 import { AuditLog, AuditReport } from './market-audit.entity';
 
 export const BETA_ACCESS_CHECKER = Symbol('BETA_ACCESS_CHECKER');
 
 export interface BetaAccessChecker {
-  checkAccess(walletAddress: string): Promise<{ hasAccess: boolean; reason?: string }>;
+  checkAccess(
+    walletAddress: string,
+  ): Promise<{ hasAccess: boolean; reason?: string }>;
 }
 
 @Injectable()
@@ -14,7 +21,8 @@ export class MarketAuditService {
   private retentionDays = 90;
 
   constructor(
-    @Optional() @Inject(BETA_ACCESS_CHECKER)
+    @Optional()
+    @Inject(BETA_ACCESS_CHECKER)
     private readonly betaAccessChecker?: BetaAccessChecker,
   ) {}
 
