@@ -227,6 +227,24 @@ Adding a route to the navbar means adding it to `NAV_LINKS` in
 `components/layout/Navigation.tsx`; the desktop row and the mobile drawer both
 render from that one array.
 
+## The `/arbitrage-demo` route
+
+`/arbitrage-demo` is a **Pages Router** page (`pages/arbitrage-demo.tsx`), so it
+renders **outside** the `app/layout.tsx` shell described above — no navbar, no
+wallet/query/WebSocket providers, no `PageErrorBoundary`. The navbar still links
+to it (`NAV_LINKS` → "Arbitrage"); following that link is a full-page navigation
+out of the app shell.
+
+`ArbitrageDisplay` itself needs no wallet or backend — it scans the markets it is
+handed (bundled `data/mockMarkets.ts`, or `GET /api/markets` when the backend is
+up) and renders opportunities. The on-chain `WagmiArbitrageExecutor` is the only
+part that needs wagmi context and must be mounted inside the shell.
+
+Full contributor guide — setup, the contract-event → `Status:` mapping, a manual
+happy-path checklist, and troubleshooting for the "blank screen / no
+opportunities" cases — is in [ARBITRAGE_DEMO.md](ARBITRAGE_DEMO.md). Vitest
+coverage: `components/arbitrage/ArbitrageDisplay.test.tsx`.
+
 ## The `/audit` route
 
 `app/audit/page.tsx` is the market audit log. It owns the page container, header
@@ -376,3 +394,9 @@ Manual checklist:
 - Clipboard access is guarded as a browser-only API.
 - QR session timers are cleaned up on unmount to keep client transition paths stable during hydration.
 - Phase 2+: if server-rendered QR previews are required, add a lightweight server-safe placeholder before hydration.
+
+## ConnectKit bridge
+
+`app/components/ParticleClientWrapper.tsx` lazy-loads the client-only Particle provider in the root layout. When the public Particle variables are configured, `ParticleProvider` mounts `ConnectKitProvider` and `app/components/ConnectKitBridge.tsx` makes wallet state available to the navbar and wallet modal. When they are absent, the bridge's default context reports `resolutionStatus: "unavailable"` with setup guidance, while the rest of the app remains navigable.
+
+The bridge reports `disconnected`, `resolving`, or `connected` after ConnectKit is mounted. Configure `NEXT_PUBLIC_PROJECT_ID`, `NEXT_PUBLIC_CLIENT_KEY`, and `NEXT_PUBLIC_APP_ID` in `Frontend/.env.local` to enable wallet connection on first load.
