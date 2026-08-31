@@ -1,10 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { ParticleClientWrapper } from "./ParticleClientWrapper";
 
-vi.mock("./ParticleProvider", () => ({
-  ParticleProvider: ({ children }: { children: import("react").ReactNode }) => (
-    <div data-testid="particle-provider">{children}</div>
+vi.mock("./UnconfiguredWalletRoot", () => ({
+  UnconfiguredWalletRoot: ({ children }: { children: import("react").ReactNode }) => (
+    <div data-testid="unconfigured-wallet-root">{children}</div>
   ),
 }));
 
@@ -22,7 +22,7 @@ describe("ParticleClientWrapper", () => {
     expect(screen.queryByTestId("wallet-provider-error")).not.toBeInTheDocument();
   });
 
-  it("wraps children with ParticleProvider after the client module loads", async () => {
+  it("wraps children with UnconfiguredWalletRoot so Particle is not required on first load", () => {
     render(
       <ParticleClientWrapper>
         <span>shell</span>
@@ -30,8 +30,6 @@ describe("ParticleClientWrapper", () => {
     );
 
     expect(screen.getByText("shell")).toBeInTheDocument();
-    await waitFor(() => {
-      expect(screen.getByTestId("particle-provider")).toBeInTheDocument();
-    });
+    expect(screen.getByTestId("unconfigured-wallet-root")).toBeInTheDocument();
   });
 });
