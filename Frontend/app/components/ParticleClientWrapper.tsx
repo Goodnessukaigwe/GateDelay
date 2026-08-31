@@ -1,5 +1,18 @@
 "use client";
 
+const ParticleProviderInner = dynamic(
+  () => import("./ParticleProvider").then((m) => m.ParticleProvider),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex min-h-screen items-center justify-center" role="status" aria-live="polite">
+        <span className="text-sm" style={{ color: "var(--muted)" }}>
+          Resolving wallet connection…
+        </span>
+      </div>
+    ),
+  },
+);
 import { useEffect, useState, type ComponentType, type ReactNode } from "react";
 
 type WalletProviderComponent = ComponentType<{ children: ReactNode }>;
