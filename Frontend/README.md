@@ -264,6 +264,57 @@ npx vitest run app/trade
 
 Manual first-load checklist (wallet, nav, and this route) lives in
 [TRADING_INTERFACE_DOCUMENTATION.md](TRADING_INTERFACE_DOCUMENTATION.md).
+## Settings (`/settings`) and SETTINGS_SUMMARY.md
+
+[`SETTINGS_SUMMARY.md`](SETTINGS_SUMMARY.md) is the resolution-status map for
+the user-settings system. It is not a runtime module — Next.js does not import
+the markdown — but it is the document that tells you how `/settings` uses the
+app shell above instead of mounting its own navbar or wallet provider.
+
+**What the page does.** `app/settings/page.tsx` is the tabbed preferences UI
+(Appearance, Notifications, Trading, Privacy, Display). State lives in
+`lib/settings.ts` (`settingsService`, localStorage key `gate_delay_user_settings`)
+and is consumed through `hooks/useSettings.ts`. `ThemeProvider` (already in
+`app/layout.tsx`) applies `settings.theme` on first load.
+
+**What the shell already provides.** Wallet connect, Markets/Settings nav, theme
+tokens, toasts, and `PageErrorBoundary` come from `app/layout.tsx`. The settings
+route only fills `<main>`. First load of `/` or `/settings` should show the
+navbar and **Connect Wallet** immediately; Particle credentials are optional
+(no-op ConnectKit when unset). Settings do not call the backend and do not
+require `NEXT_PUBLIC_API_URL`.
+
+**Failures vs blank screens.** A render throw is caught by `PageErrorBoundary`
+(message + stack in development). A bad import file shows a toast, not a white
+page. localStorage errors are logged and the store keeps `DEFAULT_SETTINGS`.
+See the troubleshooting table in SETTINGS_SUMMARY.md.
+
+**Setup (settings only):**
+
+```bash
+cd Frontend
+cp -n .env.example .env.local   # optional for this route
+npm install
+npm run dev                     # http://localhost:3000/settings
+npm test -- lib/settings.test.ts app/settings/page.test.tsx
+```
+## The `/arbitrage-demo` route
+
+`/arbitrage-demo` is a **Pages Router** page (`pages/arbitrage-demo.tsx`), so it
+renders **outside** the `app/layout.tsx` shell described above — no navbar, no
+wallet/query/WebSocket providers, no `PageErrorBoundary`. The navbar still links
+to it (`NAV_LINKS` → "Arbitrage"); following that link is a full-page navigation
+out of the app shell.
+
+`ArbitrageDisplay` itself needs no wallet or backend — it scans the markets it is
+handed (bundled `data/mockMarkets.ts`, or `GET /api/markets` when the backend is
+up) and renders opportunities. The on-chain `WagmiArbitrageExecutor` is the only
+part that needs wagmi context and must be mounted inside the shell.
+
+Full contributor guide — setup, the contract-event → `Status:` mapping, a manual
+happy-path checklist, and troubleshooting for the "blank screen / no
+opportunities" cases — is in [ARBITRAGE_DEMO.md](ARBITRAGE_DEMO.md). Vitest
+coverage: `components/arbitrage/ArbitrageDisplay.test.tsx`.
 
 ## The `/audit` route
 
@@ -318,6 +369,7 @@ error, not a blank screen.
 | `GET /api/market-audit` | Proxies NestJS audit logs for `/audit` | `NEXT_PUBLIC_API_URL` |
 | `POST /api/multisig/execute` | Executes a ready multisig tx and maps `TransactionExecuted` | (in-memory store; wallet on `/wallet`) |
 | `POST /api/ipfs/upload-json` | Stores market JSON metadata; returns gateway URL | `NEXT_PUBLIC_IPFS_GATEWAY` (optional) |
+| `POST /api/ipfs/pin/[hash]` | Pins an already-uploaded IPFS hash (used after upload) | `NEXT_PUBLIC_IPFS_GATEWAY` (optional) |
 | `GET /api/ipfs/gateway/[hash]` | Resolves a gateway URL + storage status for an IPFS hash | `NEXT_PUBLIC_IPFS_GATEWAY` (optional) |
 
 ### `/api/market-sentiment` (#755)
@@ -365,6 +417,32 @@ that points the gateway at localhost fails with `CONFIG_ERROR` instead of
 booting a broken upload path. Malformed JSON returns `400` rather than an
 unhandled exception that blanked the page.
 
+### `/api/ipfs/pin/[hash]` (#741)
+
+The pin route is the write-side follow-up to `/api/ipfs/upload-json`. `[hash]`
+is matched by a Next.js dynamic segment (see `app/api/ipfs/pin/[hash]/route.ts`).
+`useIPFS.pin` (from `MarketIPFSPanel` on `/markets/create`) POSTs an optional
+`{ name }` label after a successful upload so the in-memory `lib/ipfsStore`
+shim marks that hash as pinned — the same store the gateway route reads.
+
+```json
+{ "success": true, "message": "Hash Qm… pinned successfully", "data": { "hash": "Qm…", "pinned": true } }
+```
+
+This handler is an API route, not a page: it never renders layout or CSS.
+Wallet connect and navigation still come from `app/layout.tsx` and work on
+first load; the pin route mounts no chrome of its own.
+
+The route never throws into the app shell. Missing/empty/unsupported hashes
+or invalid JSON return `400 VALIDATION_ERROR`. An unknown hash (not yet
+uploaded) returns `404 NOT_FOUND` with a message that points at
+`POST /api/ipfs/upload-json`. Any other fault returns `500 INTERNAL_ERROR`.
+Contributors get a JSON reason instead of a blank screen.
+
+**Smoke test:** `app/api/ipfs/pin/[hash]/route.test.ts` (upload → pin, optional
+body, missing/malformed hash, invalid JSON, unknown hash, unexpected fault).
+Run with `npm test` or `npx vitest run app/api/ipfs/pin`.
+
 ### `/api/ipfs/gateway/[hash]` (#738)
 
 The gateway route is the read side of the upload flow. `[hash]` is matched by a
@@ -396,6 +474,8 @@ cp .env.example .env.local   # set NEXT_PUBLIC_API_URL / BACKEND_URL as needed
 npm install
 npm test                     # includes the five route suites above
 npm run dev                  # open /, /trade/market-1, /audit, /wallet, /markets/create
+npm test                     # includes the IPFS pin suite and other route suites above
+npm run dev                  # open /, /audit, /wallet, /markets/create
 ```
 
 Manual checklist:
@@ -407,6 +487,13 @@ Manual checklist:
 5. `/wallet` propose → sign (threshold) → execute shows `TransactionExecuted(...)`.
 6. `/markets/create` upload returns a non-localhost gateway URL; opening that URL in the gateway route shows the uploaded metadata.
 7. Hitting `/api/ipfs/gateway/` with an empty hash returns a JSON `VALIDATION_ERROR`, never a blank screen.
+2. `/audit` loads without console errors; audit proxy errors show in the viewer when the backend is down.
+3. Market detail shows sentiment error/retry (not a blank card) when AI is down; "Live" appears when the WebSocket is connected.
+4. `/wallet` propose → sign (threshold) → execute shows `TransactionExecuted(...)`.
+5. `/markets/create` upload returns a non-localhost gateway URL; opening that URL in the gateway route shows the uploaded metadata.
+6. Hitting `/api/ipfs/gateway/` with an empty hash returns a JSON `VALIDATION_ERROR`, never a blank screen.
+7. After a successful upload on `/markets/create`, **Pin Hash** calls `POST /api/ipfs/pin/[hash]` and the panel shows a success toast (not a blank card).
+8. `POST /api/ipfs/pin/` with an empty or unknown hash returns JSON (`VALIDATION_ERROR` / `NOT_FOUND`), never a blank screen.
 
 ## SSR Notes
 
@@ -415,3 +502,9 @@ Manual checklist:
 - Clipboard access is guarded as a browser-only API.
 - QR session timers are cleaned up on unmount to keep client transition paths stable during hydration.
 - Phase 2+: if server-rendered QR previews are required, add a lightweight server-safe placeholder before hydration.
+
+## ConnectKit bridge
+
+`app/components/ParticleClientWrapper.tsx` lazy-loads the client-only Particle provider in the root layout. When the public Particle variables are configured, `ParticleProvider` mounts `ConnectKitProvider` and `app/components/ConnectKitBridge.tsx` makes wallet state available to the navbar and wallet modal. When they are absent, the bridge's default context reports `resolutionStatus: "unavailable"` with setup guidance, while the rest of the app remains navigable.
+
+The bridge reports `disconnected`, `resolving`, or `connected` after ConnectKit is mounted. Configure `NEXT_PUBLIC_PROJECT_ID`, `NEXT_PUBLIC_CLIENT_KEY`, and `NEXT_PUBLIC_APP_ID` in `Frontend/.env.local` to enable wallet connection on first load.

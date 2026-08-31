@@ -2,6 +2,16 @@ import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { ParticleClientWrapper } from "./ParticleClientWrapper";
 
+import { describe, it, expect, vi } from "vitest";
+import { render, screen } from "@testing-library/react";
+import { ParticleClientWrapper } from "./ParticleClientWrapper";
+
+vi.mock("./UnconfiguredWalletRoot", () => ({
+  UnconfiguredWalletRoot: ({ children }: { children: import("react").ReactNode }) => (
+    <div data-testid="unconfigured-wallet-root">{children}</div>
+  ),
+}));
+
 describe("ParticleClientWrapper", () => {
   it("renders navbar and wallet chrome on first paint instead of a blank screen", () => {
     render(
@@ -17,6 +27,7 @@ describe("ParticleClientWrapper", () => {
   });
 
   it("keeps the app shell visible while the default wallet root mounts", () => {
+  it("wraps children with UnconfiguredWalletRoot so Particle is not required on first load", () => {
     render(
       <ParticleClientWrapper>
         <span>shell</span>
@@ -24,5 +35,6 @@ describe("ParticleClientWrapper", () => {
     );
 
     expect(screen.getByText("shell")).toBeInTheDocument();
+    expect(screen.getByTestId("unconfigured-wallet-root")).toBeInTheDocument();
   });
 });
