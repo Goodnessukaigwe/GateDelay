@@ -1,4 +1,8 @@
 # ------------------------------------------------------------
+# Foundry profile configuration.
+# Keep the version in CI (.github/workflows/ci.yml) aligned with
+# the local toolchain installed by Foundry.
+# ------------------------------------------------------------
 # Toolchain pin — keep this in sync with the forge version used in CI
 # (.github/workflows/test.yml).
 # Bump deliberately; never let it float.
